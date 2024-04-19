@@ -4,8 +4,8 @@ from bot.helper.ext_utils.bot_utils import (MirrorStatus,
                                             get_readable_file_size,
                                             get_readable_time)
 
-engine_ = f"Aria2 v{aria2.client.get_version()['version']}"
-
+# engine_ = f"Aria2 v{aria2.client.get_version()['version']}"
+engine_ = "Aria2"
 
 class DirectStatus:
     def __init__(self, obj, gid, listener):
