@@ -581,7 +581,7 @@ if BASE_URL:
 if not ospath.exists('.netrc'):
     with open('.netrc', 'w'):
         pass
-zrun("chmod 600 .netrc && cp .netrc /root/.netrc && chmod +x aria.sh && ./aria.sh", shell=True,)
+# zrun("chmod 600 .netrc && cp .netrc /root/.netrc && chmod +x aria.sh && ./aria.sh", shell=True,)
 if ospath.exists('accounts.zip'):
     if ospath.exists('accounts'):
         zrun(["rm", "-rf", "accounts"])
