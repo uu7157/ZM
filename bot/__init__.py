@@ -627,8 +627,8 @@ bot_name = bot.me.username
 info(f"Starting Bot @{bot_name}...")
 scheduler = AsyncIOScheduler(timezone=str(get_localzone()), event_loop=bot_loop)
 
-if not aria2_options:
-    aria2_options = aria2.client.get_global_option()
-else:
-    a2c_glo = {op: aria2_options[op] for op in aria2c_global if op in aria2_options}
-    aria2.set_global_options(a2c_glo)
+# if not aria2_options:
+#     aria2_options = aria2.client.get_global_option()
+# else:
+#     a2c_glo = {op: aria2_options[op] for op in aria2c_global if op in aria2_options}
+#     aria2.set_global_options(a2c_glo)
