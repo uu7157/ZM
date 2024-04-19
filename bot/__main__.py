@@ -15,7 +15,7 @@ from pyrogram.handlers import MessageHandler
 from bot import (DATABASE_URL, INCOMPLETE_TASK_NOTIFIER, LOGGER,
                  STOP_DUPLICATE_TASKS, Interval, QbInterval, bot,
                  config_dict, scheduler, user_data)
-from bot.helper.listeners.aria2_listener import start_aria2_listener
+# from bot.helper.listeners.aria2_listener import start_aria2_listener
 
 from .helper.ext_utils.bot_utils import get_readable_time, new_thread, set_commands, sync_to_async
 from .helper.ext_utils.db_handler import DbManager
@@ -78,7 +78,8 @@ async def restart(_, message):
         if interval:
             interval[0].cancel()
     await sync_to_async(clean_all)
-    proc1 = await create_subprocess_exec('pkill', '-9', '-f', 'gunicorn|aria2c|qbittorrent-nox|ffmpeg|rclone')
+    # proc1 = await create_subprocess_exec('pkill', '-9', '-f', 'gunicorn|aria2c|qbittorrent-nox|ffmpeg|rclone')
+    proc1 = await create_subprocess_exec('pkill', '-9', '-f', 'gunicorn|ffmpeg|rclone')
     proc2 = await create_subprocess_exec('python3', 'update.py')
     await gather(proc1.wait(), proc2.wait())
     async with aiopen(".restartmsg", "w") as f:
@@ -219,7 +220,7 @@ async def restart_notification():
 
 async def main():
     await gather(start_cleanup(), torrent_search.initiate_search_tools(), restart_notification(), set_commands(bot))
-    await sync_to_async(start_aria2_listener, wait=False)
+    # await sync_to_async(start_aria2_listener, wait=False)
 
     bot.add_handler(MessageHandler(start,   filters=command(BotCommands.StartCommand)))
     bot.add_handler(MessageHandler(log,     filters=command(BotCommands.LogCommand)     & CustomFilters.sudo))
