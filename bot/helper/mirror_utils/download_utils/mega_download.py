@@ -4,7 +4,7 @@ from aiofiles.os import makedirs
 from threading import Event
 
 from aiofiles.os import makedirs
-from mega import MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer
+from mega.mega import MegaApi, MegaError, MegaListener, MegaRequest, MegaTransfer
 
 from bot import (LOGGER, config_dict, download_dict, download_dict_lock,
                  non_queued_dl, queue_dict_lock)
