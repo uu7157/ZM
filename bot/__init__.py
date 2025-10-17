@@ -21,9 +21,22 @@ from tzlocal import get_localzone
 from uvloop import install
 from urllib3 import disable_warnings as udw
 
-faulthandler_enable()
-install()
+import asyncio
+
+# faulthandler_enable()
+# install()
+# setdefaulttimeout(600)
+
+# 🩹 Python 3.12 fix: ensure there’s a default event loop
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
+# Optional safety: disable uvloop strict policy
+asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
 setdefaulttimeout(600)
+
 
 botStartTime = time()
 
