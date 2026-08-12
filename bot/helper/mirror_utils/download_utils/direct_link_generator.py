@@ -15,7 +15,7 @@ from requests import session as req_session
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from bot import config_dict
+from bot import LOGGER, config_dict
 from bot.helper.ext_utils.bot_utils import is_share_link, text_size_to_bytes
 from bot.helper.ext_utils.exceptions import DirectDownloadLinkException
 from bot.helper.ext_utils.help_messages import PASSWORD_ERROR_MESSAGE
@@ -839,6 +839,7 @@ def gofile(url):
             raise DirectDownloadLinkException("ERROR: This folder is not public")
 
         data = _json["data"]
+        LOGGER.info(f"Gofile API response: {_json}")
 
         if not details["title"]:
             details["title"] = data["name"] if data["type"] == "folder" else _id
