@@ -759,9 +759,111 @@ def gofile(url):
             url = url.split("::")[-2]
         else:
             _password = ""
+
         _id = url.split("/")[-1]
     except Exception as e:
-        raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}")
+        raise DirectDownloadLinkException(
+            f"ERROR: {e.__class__.__name__}"
+        )
+
+    def __get_wt_secret(session):
+        """
+        Get Gofile's current website-token secret from its frontend JS.
+        """
+        try:
+            headers = {
+                "User-Agent": user_agent,
+                "Accept": "*/*",
+                "Connection": "keep-alive",
+            }
+
+            # Get the Gofile homepage and locate the WT script.
+            response = session.get(
+                "https://gofile.io/",
+                headers=headers,
+                timeout=20,
+            )
+            response.raise_for_status()
+
+            script_match = search(
+                r'<script[^>]+src=["\']([^"\']*wt(?:\.obf)?\.js)["\']',
+                response.text,
+                flags=0,
+            )
+
+            script_urls = []
+
+            if script_match:
+                script_url = script_match.group(1)
+
+                if script_url.startswith("//"):
+                    script_url = "https:" + script_url
+                elif script_url.startswith("/"):
+                    script_url = "https://gofile.io" + script_url
+
+                script_urls.append(script_url)
+
+            # Fallbacks used by the newer implementation.
+            script_urls.extend([
+                "https://gofile.io/js/wt.obf.js",
+                "https://gofile.io/dist/js/wt.obf.js",
+            ])
+
+            for script_url in script_urls:
+                try:
+                    js = session.get(
+                        script_url,
+                        headers=headers,
+                        timeout=20,
+                    )
+                    if js.ok and js.text:
+                        # The current WT JS contains the secret as part
+                        # of the generateWT() implementation.
+                        #
+                        # Look for the final string argument used by the
+                        # SHA-256 input:
+                        #
+                        # userAgent::language::token::timeWindow::SECRET
+                        secret_match = search(
+                            r'(?:"|\'|`)([A-Za-z0-9]{8,64})(?:"|\'|`)',
+                            js.text,
+                        )
+
+                        if secret_match:
+                            return secret_match.group(1)
+                except Exception:
+                    continue
+
+            raise DirectDownloadLinkException(
+                "ERROR: Could not obtain Gofile website token secret."
+            )
+
+        except DirectDownloadLinkException:
+            raise
+        except Exception as e:
+            raise DirectDownloadLinkException(
+                f"ERROR: {e.__class__.__name__}"
+            )
+
+    wt_secret = None
+
+    def __get_website_token(session, token):
+        nonlocal wt_secret
+
+        if wt_secret is None:
+            wt_secret = __get_wt_secret(session)
+
+        lang = "en-US"
+
+        data = (
+            f"{user_agent}::"
+            f"{lang}::"
+            f"{token}::"
+            f"{int(time() / 14400)}::"
+            f"{wt_secret}"
+        )
+
+        return sha256(data.encode("utf-8")).hexdigest()
 
     def __get_token(session):
         headers = {
@@ -769,120 +871,200 @@ def gofile(url):
             "Accept-Encoding": "gzip",
             "Accept": "*/*",
             "Connection": "keep-alive",
+            "Origin": "https://gofile.io",
+            "Referer": "https://gofile.io/",
         }
-        __url = "https://api.gofile.io/accounts"
+
+        # IMPORTANT:
+        # Gofile now expects a website token even when creating
+        # the temporary guest account. The token is generated with
+        # an empty account token at this stage.
+        headers["X-Website-Token"] = __get_website_token(
+            session,
+            "",
+        )
+        headers["X-BL"] = "en-US"
+
         try:
-            __res = session.post(__url, headers=headers, timeout=20)
+            __res = session.post(
+                "https://api.gofile.io/accounts",
+                headers=headers,
+                timeout=20,
+            )
             __res.raise_for_status()
+
             __json = __res.json()
-    
+
             if __json.get("status") != "ok":
                 raise DirectDownloadLinkException(
-                    "ERROR: Failed to get token."
+                    f"ERROR: Failed to get token: "
+                    f"{__json.get('status')}"
                 )
+
             token = __json["data"]["token"]
-    
+
             session.cookies.set("accountToken", token)
             session.headers.update({
                 "Authorization": f"Bearer {token}"
             })
-            return token
-        except Exception as e:
-            raise e
 
-    def __get_website_token(session, token):
-        lang = "en-US"
-        current_user_agent = session.headers.get("User-Agent", user_agent)
-        data = (
-            f"{current_user_agent}::"
-            f"{lang}::"
-            f"{token}::"
-            f"{int(time() / 14400)}::"
-            f"5d4f7g8sd45fsd"
-        )
-        return sha256(data.encode()).hexdigest()
+            return token
+
+        except DirectDownloadLinkException:
+            raise
+        except Exception as e:
+            raise DirectDownloadLinkException(
+                f"ERROR: {e.__class__.__name__}"
+            )
 
     def __fetch_links(session, _id, folderPath=""):
         _url = (
             f"https://api.gofile.io/contents/{_id}"
             f"?cache=true&sortField=createTime&sortDirection=1"
         )
-        
-        website_token = __get_website_token(session, token)
-        
+
         headers = {
             "User-Agent": user_agent,
             "Accept-Encoding": "gzip",
             "Accept": "*/*",
             "Connection": "keep-alive",
             "Authorization": f"Bearer {token}",
-            "X-Website-Token": website_token,
+            "X-Website-Token": __get_website_token(
+                session,
+                token,
+            ),
             "X-BL": "en-US",
+            "Origin": "https://gofile.io",
+            "Referer": "https://gofile.io/",
         }
+
         if _password:
             _url += f"&password={_password}"
+
         try:
-            _json = session.get(_url, headers=headers).json()
+            __res = session.get(
+                _url,
+                headers=headers,
+                timeout=30,
+            )
+            __res.raise_for_status()
+            _json = __res.json()
         except Exception as e:
-            raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}")
-        if _json["status"] in "error-passwordRequired":
+            raise DirectDownloadLinkException(
+                f"ERROR: {e.__class__.__name__}"
+            )
+
+        if _json.get("status") == "error-passwordRequired":
             raise DirectDownloadLinkException(
                 f"ERROR:\n{PASSWORD_ERROR_MESSAGE.format(url)}"
             )
-        if _json["status"] in "error-passwordWrong":
-            raise DirectDownloadLinkException("ERROR: This password is wrong !")
-        if _json["status"] in "error-notFound":
+
+        if _json.get("status") == "error-passwordWrong":
+            raise DirectDownloadLinkException(
+                "ERROR: This password is wrong !"
+            )
+
+        if _json.get("status") == "error-notFound":
             raise DirectDownloadLinkException(
                 "ERROR: File not found on gofile's server"
             )
-        if _json["status"] in "error-notPublic":
-            raise DirectDownloadLinkException("ERROR: This folder is not public")
+
+        if _json.get("status") == "error-notPublic":
+            raise DirectDownloadLinkException(
+                "ERROR: This folder is not public"
+            )
+
+        if _json.get("status") != "ok":
+            raise DirectDownloadLinkException(
+                f"ERROR: Gofile API returned: "
+                f"{_json.get('status')}"
+            )
 
         data = _json["data"]
-        LOGGER.info(f"Gofile API response: {_json}")
 
         if not details["title"]:
-            details["title"] = data["name"] if data["type"] == "folder" else _id
+            details["title"] = (
+                data["name"] if data.get("type") == "folder" else _id
+            )
 
-        contents = data["children"]
+        contents = data.get("children", {})
+
         for content in contents.values():
             if content["type"] == "folder":
-                if not content["public"]:
+                if not content.get("public", True):
                     continue
+
                 if not folderPath:
-                    newFolderPath = path.join(details["title"], content["name"])
+                    newFolderPath = path.join(
+                        details["title"],
+                        content["name"],
+                    )
                 else:
-                    newFolderPath = path.join(folderPath, content["name"])
-                __fetch_links(session, content["id"], newFolderPath)
+                    newFolderPath = path.join(
+                        folderPath,
+                        content["name"],
+                    )
+
+                __fetch_links(
+                    session,
+                    content["id"],
+                    newFolderPath,
+                )
+
             else:
                 if not folderPath:
                     folderPath = details["title"]
+
                 item = {
                     "path": path.join(folderPath),
                     "filename": content["name"],
                     "url": content["link"],
                 }
+
                 if "size" in content:
                     size = content["size"]
+
                     if isinstance(size, str) and size.isdigit():
                         size = float(size)
+
                     details["total_size"] += size
+
                 details["contents"].append(item)
 
-    details = {"contents": [], "title": "", "total_size": 0}
+    details = {
+        "contents": [],
+        "title": "",
+        "total_size": 0,
+    }
+
     with Session() as session:
+        session.headers.update({
+            "Accept-Encoding": "gzip",
+            "User-Agent": user_agent,
+            "Connection": "keep-alive",
+            "Accept": "*/*",
+        })
+
         try:
             token = __get_token(session)
         except Exception as e:
-            raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}")
+            raise DirectDownloadLinkException(
+                f"ERROR: {e.__class__.__name__}"
+            )
+
         details["header"] = f"Cookie: accountToken={token}"
+
         try:
             __fetch_links(session, _id)
         except Exception as e:
             raise DirectDownloadLinkException(e)
 
     if len(details["contents"]) == 1:
-        return (details["contents"][0]["url"], details["header"])
+        return (
+            details["contents"][0]["url"],
+            details["header"],
+        )
+
     return details
 
 def mediafireFolder(url):
