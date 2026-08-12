@@ -4,7 +4,7 @@ from http.cookiejar import MozillaCookieJar
 from json import loads
 from os import path
 from re import findall, match, search
-from time import sleep
+from time import sleep, time
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
@@ -766,28 +766,58 @@ def gofile(url):
     def __get_token(session):
         headers = {
             "User-Agent": user_agent,
-            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Encoding": "gzip",
             "Accept": "*/*",
             "Connection": "keep-alive",
         }
-        __url = f"https://api.gofile.io/accounts"
+        __url = "https://api.gofile.io/accounts"
         try:
-            __res = session.post(__url, headers=headers).json()
-            if __res["status"] != "ok":
-                raise DirectDownloadLinkException(f"ERROR: Failed to get token.")
-            return __res["data"]["token"]
+            __res = session.post(__url, headers=headers, timeout=20)
+            __res.raise_for_status()
+            __json = __res.json()
+    
+            if __json.get("status") != "ok":
+                raise DirectDownloadLinkException(
+                    "ERROR: Failed to get token."
+                )
+            token = __json["data"]["token"]
+    
+            session.cookies.set("accountToken", token)
+            session.headers.update({
+                "Authorization": f"Bearer {token}"
+            })
+            return token
         except Exception as e:
             raise e
 
+    def __get_website_token(session, token):
+        lang = "en-US"
+        current_user_agent = session.headers.get("User-Agent", user_agent)
+        data = (
+            f"{current_user_agent}::"
+            f"{lang}::"
+            f"{token}::"
+            f"{int(time() / 14400)}::"
+            f"5d4f7g8sd45fsd"
+        )
+        return sha256(data.encode()).hexdigest()
+
     def __fetch_links(session, _id, folderPath=""):
-        _url = f"https://api.gofile.io/contents/{_id}?wt=ecaaa3d5ec35317823ec949da6097e7836a4b9409e7227f29ee39ee26128802e&cache=true"
+        _url = (
+            f"https://api.gofile.io/contents/{_id}"
+            f"?cache=true&sortField=createTime&sortDirection=1"
+        )
+        
+        website_token = __get_website_token(session, token)
+        
         headers = {
             "User-Agent": user_agent,
-            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Encoding": "gzip",
             "Accept": "*/*",
             "Connection": "keep-alive",
-            "Authorization": "Bearer" + " " + token,
-            "x-website-token": "ecaaa3d5ec35317823ec949da6097e7836a4b9409e7227f29ee39ee26128802e",
+            "Authorization": f"Bearer {token}",
+            "X-Website-Token": website_token,
+            "X-BL": "en-US",
         }
         if _password:
             _url += f"&password={_password}"
