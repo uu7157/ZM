@@ -780,14 +780,14 @@ def gofile(url):
             raise e
 
     def __fetch_links(session, _id, folderPath=""):
-        _url = f"https://api.gofile.io/contents/{_id}?wt=4fd6sg89d7s6&cache=true"
+        _url = f"https://api.gofile.io/contents/{_id}?wt=ecaaa3d5ec35317823ec949da6097e7836a4b9409e7227f29ee39ee26128802e&cache=true"
         headers = {
             "User-Agent": user_agent,
             "Accept-Encoding": "gzip, deflate, br",
             "Accept": "*/*",
             "Connection": "keep-alive",
             "Authorization": "Bearer" + " " + token,
-            "x-website-token": "4fd6sg89d7s6",
+            "x-website-token": "ecaaa3d5ec35317823ec949da6097e7836a4b9409e7227f29ee39ee26128802e",
         }
         if _password:
             _url += f"&password={_password}"
